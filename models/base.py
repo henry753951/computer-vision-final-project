@@ -59,7 +59,7 @@ class BaseAlgorithm(ABC):
 
         logger.info(f"[{self.name}] Starting Benchmarking...")
 
-        results = self.model.evaluate(data.val_ds)
+        results = self.model.evaluate(data.test_ds)
         logger.info(f"[{self.name}] Benchmarking done.")
         return {
             "loss": results[0],

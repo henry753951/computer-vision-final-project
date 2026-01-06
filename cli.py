@@ -58,6 +58,9 @@ def info_dataset(
     """Display dataset information and force cache rebuild if specified."""
 
     dataset = ImageLoader.load_dataset(force_refresh=force)
-    logger.info(
-        f"Dataset Info - Train Steps: {dataset.train_steps}, Val Steps: {dataset.val_steps}, Classes: {dataset.num_classes}"
-    )
+    logger.info(f"Number of classes: {dataset.num_classes}")
+    logger.info(f"Class names: {dataset.class_names}")
+    logger.info(f"Training steps: {dataset.train_steps}")
+    logger.info(f"Validation steps: {dataset.val_steps}")
+    logger.info(f"Testing steps: {dataset.test_steps}")
+    logger.info("Dataset loaded successfully.")

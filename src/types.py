@@ -1,3 +1,4 @@
+from numpy import test
 import tensorflow as tf
 from dataclasses import dataclass
 from typing import List
@@ -16,6 +17,9 @@ class CachedMetadata:
     val_paths: List[str]
     val_labels: List[int]
 
+    test_paths: List[str]
+    test_labels: List[int]
+
     class_names: List[str]
     num_classes: int
 
@@ -28,9 +32,11 @@ class RuntimeDataset:
 
     train_ds: tf.data.Dataset
     val_ds: tf.data.Dataset
+    test_ds: tf.data.Dataset
 
     train_steps: int
     val_steps: int
+    test_steps: int
 
     num_classes: int
     class_names: List[str]

@@ -1,6 +1,9 @@
 import pickle
-import tensorflow as tf
+import math
 from typing import List, Tuple, Dict
+
+import numpy as np
+import tensorflow as tf
 
 from core.config import config
 from src.types import CachedMetadata, RuntimeDataset
@@ -39,12 +42,11 @@ class ImageLoader:
                 label_name = " ".join(parts[1:])
 
                 # 組合實體路徑: data/pictures/{Label}/{Filename}
-                # 注意：這裡轉為 str 以便 pickle
                 p = config.PICTURES_DIR / label_name / filename
                 full_paths.append(str(p))
                 labels.append(label_name)
 
-        # 2. 解析 query.txt (Indices)
+        # 2. 解析 query.txt (Indices) -> 當作 test set
         q_indices: List[int] = []
         if config.QUERY_PATH.exists():
             with open(config.QUERY_PATH, "r") as f:
@@ -57,7 +59,10 @@ class ImageLoader:
     @classmethod
     def _generate_metadata(cls) -> CachedMetadata:
         """
-        執行解析、編碼與切分，並產生可快取的 Metadata 物件
+        解析、編碼與「初步 train/test 切分」，並產生可快取的 Metadata 物件。
+
+        注意：這裡只切 train/test。
+        之後在 load_dataset() 再從 train 裡面切出 val。
         """
         logger.info("[yellow]Parsing raw text files (No cache found)...[/]")
         all_paths, all_labels_str, query_indices_list = cls._parse_raw_files()
@@ -73,16 +78,16 @@ class ImageLoader:
         }
         all_labels_int = [class_to_idx[l] for l in all_labels_str]
 
-        # Splitting
+        # 先依 query 當 test，其餘當 train
         query_set = set(query_indices_list)
 
         train_paths, train_labels = [], []
-        val_paths, val_labels = [], []
+        test_paths, test_labels = [], []
 
         for i in range(total_count):
             if i in query_set:
-                val_paths.append(all_paths[i])
-                val_labels.append(all_labels_int[i])
+                test_paths.append(all_paths[i])
+                test_labels.append(all_labels_int[i])
             else:
                 train_paths.append(all_paths[i])
                 train_labels.append(all_labels_int[i])
@@ -90,8 +95,10 @@ class ImageLoader:
         return CachedMetadata(
             train_paths=train_paths,
             train_labels=train_labels,
-            val_paths=val_paths,
-            val_labels=val_labels,
+            val_paths=[],  # val 之後再從 train 裡切
+            val_labels=[],
+            test_paths=test_paths,
+            test_labels=test_labels,
             class_names=unique_classes,
             num_classes=len(unique_classes),
         )
@@ -103,12 +110,11 @@ class ImageLoader:
     def _decode_image(
         path: tf.Tensor, label: tf.Tensor, num_classes: int
     ) -> Tuple[tf.Tensor, tf.Tensor]:
-        """TF Graph 內部的圖片讀取函數"""
         img_raw = tf.io.read_file(path)
         img = tf.io.decode_image(img_raw, channels=3, expand_animations=False)
         img = tf.image.resize(img, config.IMG_SIZE)
         img = tf.cast(img, tf.float32)
-        # img = img / 255.0  (視模型需求決定是否在此做 Rescaling)
+        # img = img / 255.0
 
         label_one_hot = tf.one_hot(label, depth=num_classes)
         return img, label_one_hot
@@ -116,7 +122,8 @@ class ImageLoader:
     @classmethod
     def load_dataset(cls, force_refresh: bool = False) -> RuntimeDataset:
         """
-        主入口：檢查快取 -> 載入 Metadata -> 轉換為 TF Dataset
+        主入口：檢查快取 -> 載入 Metadata
+        -> 從 metadata.train_* 再切出 train/val -> 轉換為 TF Dataset
         """
 
         # 1. 取得 Metadata (從快取或重新解析)
@@ -142,20 +149,60 @@ class ImageLoader:
             except Exception as e:
                 logger.error(f"Failed to save cache: {e}")
 
-        # 2. 建構 TensorFlow Datasets
+        # 2. 從「目前的 train_paths/train_labels」再切出 val
+        #    - train_data 的 0.8 當最終 train
+        #    - train_data 的 0.2 當 val
+        train_paths = np.array(metadata.train_paths)
+        train_labels = np.array(metadata.train_labels)
+
+        n = len(train_paths)
+        if n == 0:
+            raise ValueError("No training data after split")
+
+        rng = np.random.default_rng(seed=7414)
+        indices = rng.permutation(n)
+
+        val_size = int(math.floor(n * 0.2))
+        val_idx = indices[:val_size]
+        real_train_idx = indices[val_size:]
+
+        final_train_paths = train_paths[real_train_idx].tolist()
+        final_train_labels = train_labels[real_train_idx].tolist()
+
+        final_val_paths = train_paths[val_idx].tolist()
+        final_val_labels = train_labels[val_idx].tolist()
+
         logger.info(
-            f"Building TF Pipelines. Train: {len(metadata.train_paths)}, Val: {len(metadata.val_paths)}"
+            f"Building TF Pipelines. "
+            f"Train: {len(final_train_paths)}, "
+            f"Val: {len(final_val_paths)}, "
+            f"Test: {len(metadata.test_paths)}"
         )
 
         def build_pipe(paths: List[str], labels: List[int]) -> tf.data.Dataset:
             if not paths:
-                # 回傳空 Dataset 防止報錯
                 return tf.data.Dataset.from_tensors(
                     (tf.zeros(config.IMG_SIZE + (3,)), tf.zeros(metadata.num_classes))
                 ).take(0)
 
-            ds = tf.data.Dataset.from_tensor_slices((paths, labels))
-            ds = ds.shuffle(len(paths), seed=7414) if len(paths) > 0 else ds
+            paths_tensor = tf.constant(paths)
+            labels_tensor = tf.constant(labels, dtype=tf.int32)
+
+            idx = tf.range(tf.shape(paths_tensor)[0])
+            idx = tf.random.shuffle(idx, seed=7414)
+            paths_shuffled = tf.gather(paths_tensor, idx)
+            labels_shuffled = tf.gather(labels_tensor, idx)
+
+            ds = tf.data.Dataset.from_tensor_slices((paths_shuffled, labels_shuffled))
+
+            # 這裡改成 Python int，避免 int32 Tensor 轉型問題
+            num_samples = int(paths_shuffled.shape[0])  # 或用 len(paths)
+            buffer_size = min(num_samples, 4 * config.BATCH_SIZE)
+
+            ds = ds.shuffle(
+                buffer_size=buffer_size, seed=7414, reshuffle_each_iteration=True
+            )
+
             ds = ds.map(
                 lambda p, l: cls._decode_image(p, l, metadata.num_classes),
                 num_parallel_calls=tf.data.AUTOTUNE,
@@ -164,14 +211,20 @@ class ImageLoader:
             ds = ds.prefetch(tf.data.AUTOTUNE)
             return ds
 
-        train_ds = build_pipe(metadata.train_paths, metadata.train_labels)
-        val_ds = build_pipe(metadata.val_paths, metadata.val_labels)
+        train_ds = build_pipe(final_train_paths, final_train_labels)
+        val_ds = build_pipe(final_val_paths, final_val_labels)
+        test_ds = build_pipe(metadata.test_paths, metadata.test_labels)
+
+        def steps(num_samples: int) -> int:
+            return max(1, num_samples // config.BATCH_SIZE) if num_samples > 0 else 0
 
         return RuntimeDataset(
             train_ds=train_ds,
             val_ds=val_ds,
-            train_steps=len(metadata.train_paths) // config.BATCH_SIZE,
-            val_steps=len(metadata.val_paths) // config.BATCH_SIZE,
+            test_ds=test_ds,
+            train_steps=steps(len(final_train_paths)),
+            val_steps=steps(len(final_val_paths)),
+            test_steps=steps(len(metadata.test_paths)),
             num_classes=metadata.num_classes,
             class_names=metadata.class_names,
         )
