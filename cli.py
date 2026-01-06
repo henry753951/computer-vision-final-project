@@ -27,7 +27,7 @@ def train(
         bool, typer.Option("--force", "-f", help="Force rebuild dataset cache")
     ] = False,
     models: Annotated[
-        list[str],
+        str,
         typer.Option(
             "--models",
             "-ms",
@@ -40,6 +40,8 @@ def train(
         for m in manager.get_supported_models():
             manager.train_model(m, force_refresh=force)
     elif models:
+        import json
+        models = json.loads(models)
         for m in models:
             manager.train_model(m, force_refresh=force)
     else:
