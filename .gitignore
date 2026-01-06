@@ -1,3 +1,4 @@
 data/pictures/
-dataset_cache.pkl
 **/__pycache__
+*.pkl
+data/models/*
