@@ -14,7 +14,7 @@ num_classes = 10
 train_root='./train/'
 
 #載入資料並切割為訓練資料及驗證資料
-tdata = tf.keras.preprocessing.image_dataset_from_directory(
+tdata = keras.preprocessing.image_dataset_from_directory(
     './train/',
     validation_split=0.2,
     subset="training",
@@ -24,7 +24,7 @@ tdata = tf.keras.preprocessing.image_dataset_from_directory(
     #color_mode="grayscale",
     label_mode='categorical'
 )
-vdata = tf.keras.preprocessing.image_dataset_from_directory(
+vdata = keras.preprocessing.image_dataset_from_directory(
     './train/',
     validation_split=0.2,
     subset="validation",
@@ -56,7 +56,7 @@ input_shape = (image_size[0],image_size[1],3)
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
-feature_model = tf.keras.applications.InceptionV3(
+feature_model = keras.applications.InceptionV3(
     include_top=False,#是否包含全連階層
     weights='imagenet',#是否載入imagenet權重
     input_shape=input_shape, #輸入圍度
@@ -66,9 +66,9 @@ feature_model = tf.keras.applications.InceptionV3(
 
 #feature_model.trainable = False
 
-global_average_layer = tf.keras.layers.GlobalAveragePooling2D()
-#dropout = tf.keras.layers.Dropout(0.1,)
-dense_layer = tf.keras.layers.Dense(10,activation='softmax')
+global_average_layer = keras.layers.GlobalAveragePooling2D()
+#dropout = keras.layers.Dropout(0.1,)
+dense_layer = keras.layers.Dense(10,activation='softmax')
 
 model = models.Sequential()
 model.add(feature_model)
@@ -79,7 +79,7 @@ print("網路架構")
 model.summary()
 
 #優化器
-Adam = tf.keras.optimizers.Adam
+Adam = keras.optimizers.Adam
 optimizer = Adam(lr=1e-4)
 #建立模型
 model.compile(
