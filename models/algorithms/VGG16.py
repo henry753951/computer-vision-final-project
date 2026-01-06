@@ -14,7 +14,7 @@ class VGG16Algorithm(BaseAlgorithm):
         )
         base.trainable = False
 
-        x = layers.Flatten()(base.output)
+        x = layers.GlobalAveragePooling2D()(base.output)
         x = layers.Dense(4096, activation="relu")(x)
         x = layers.Dropout(0.5)(x)
         x = layers.Dense(4096, activation="relu")(x)
