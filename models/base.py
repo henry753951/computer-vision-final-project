@@ -48,7 +48,22 @@ class BaseAlgorithm(ABC):
         )
 
         self._save_plots(history, save_dir)
+        self._save_results(history.history, save_dir)
         logger.info(f"[{self.name}] Training done. Saved to {save_dir}")
+
+    def benchmark(self, data: RuntimeDataset):
+        if self.model is None:
+            logger.error(f"[{self.name}] Model is not trained yet.")
+            return
+
+        logger.info(f"[{self.name}] Starting Benchmarking...")
+
+        results = self.model.evaluate(data.val_ds)
+        logger.info(f"[{self.name}] Benchmarking done.")
+        return {
+            "val_loss": results[0],
+            "val_accuracy": results[1],
+        }
 
     def _save_plots(self, history, save_dir: Path):
         # 繪製 Accuracy
@@ -74,3 +89,15 @@ class BaseAlgorithm(ABC):
         plt.legend()
         plt.savefig(save_dir / "loss.png")
         plt.close()
+
+    def _save_results(self, results: dict, save_dir: Path):
+        final_results = {
+            "val_accuracy": results.get("val_accuracy", None),
+            "val_loss": results.get("val_loss", None),
+            "train_accuracy": results.get("accuracy", None),
+            "train_loss": results.get("loss", None),
+        }
+        with open(save_dir / "results.txt", "w") as f:
+            for key, value in final_results.items():
+                f.write(f"{key}: {value}\n")
+        logger.info(f"[{self.name}] Results saved to {save_dir / 'results.txt'}")

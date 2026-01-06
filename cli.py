@@ -22,13 +22,31 @@ def list_models():
 def train(
     model: Annotated[
         str, typer.Option("--model", "-m", help="Name of the model (e.g., VGG16)")
-    ],
+    ] = None,
     force: Annotated[
         bool, typer.Option("--force", "-f", help="Force rebuild dataset cache")
     ] = False,
 ):
     """Train a specific model using cached metadata if available."""
-    manager.train_model(model, force_refresh=force)
+    if not model:
+        for m in manager.get_supported_models():
+            manager.train_model(m, force_refresh=force)
+    else:
+        manager.train_model(model, force_refresh=force)
+
+
+@app.command("benchmark")
+def benchmark(
+    specific: Annotated[
+        str, typer.Option("--model", "-m", help="Name of the model to benchmark")
+    ] = None,
+):
+    if specific:
+        """Benchmark a specific model."""
+        manager.benchmark_model(specific)
+    else:
+        """Benchmark all supported models."""
+        manager.benchmark_all_models()
 
 
 @app.command("dataset")
