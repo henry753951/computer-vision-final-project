@@ -41,3 +41,6 @@ uv run main.py benchmark --model ResNet50
 # 列出支援的模型
 uv run main.py list-models
 ```
+
+## 結果
+訓練及基準測試結果會儲存在 `data/models/{MODEL_NAME}/` 目錄下，包含模型權重、訓練歷史及損失/準確率曲線圖。
