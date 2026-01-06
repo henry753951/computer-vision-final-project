@@ -26,10 +26,21 @@ def train(
     force: Annotated[
         bool, typer.Option("--force", "-f", help="Force rebuild dataset cache")
     ] = False,
+    models: Annotated[
+        list[str],
+        typer.Option(
+            "--models",
+            "-ms",
+            help="Names of models to train (if --model not specified)",
+        ),
+    ] = None,
 ):
     """Train a specific model using cached metadata if available."""
-    if not model:
+    if not model and not models:
         for m in manager.get_supported_models():
+            manager.train_model(m, force_refresh=force)
+    elif models:
+        for m in models:
             manager.train_model(m, force_refresh=force)
     else:
         manager.train_model(model, force_refresh=force)
