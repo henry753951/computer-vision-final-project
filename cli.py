@@ -12,7 +12,7 @@ app = typer.Typer(
 manager = CLIManager()
 
 
-@app.command("list")
+@app.command("list-models")
 def list_models():
     """List all supported CNN architectures."""
     manager.list_models()
@@ -37,13 +37,13 @@ def train(
 
 @app.command("benchmark")
 def benchmark(
-    specific: Annotated[
+    model: Annotated[
         str, typer.Option("--model", "-m", help="Name of the model to benchmark")
     ] = None,
 ):
-    if specific:
+    if model:
         """Benchmark a specific model."""
-        manager.benchmark_model(specific)
+        manager.benchmark_model(model)
     else:
         """Benchmark all supported models."""
         manager.benchmark_all_models()

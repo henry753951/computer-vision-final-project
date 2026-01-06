@@ -2,6 +2,7 @@ import keras
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 from pathlib import Path
+import json
 
 from src.types import RuntimeDataset
 from core.config import config
@@ -61,8 +62,8 @@ class BaseAlgorithm(ABC):
         results = self.model.evaluate(data.val_ds)
         logger.info(f"[{self.name}] Benchmarking done.")
         return {
-            "val_loss": results[0],
-            "val_accuracy": results[1],
+            "loss": results[0],
+            "accuracy": results[1],
         }
 
     def _save_plots(self, history, save_dir: Path):
@@ -91,13 +92,17 @@ class BaseAlgorithm(ABC):
         plt.close()
 
     def _save_results(self, results: dict, save_dir: Path):
-        final_results = {
-            "val_accuracy": results.get("val_accuracy", None),
-            "val_loss": results.get("val_loss", None),
-            "train_accuracy": results.get("accuracy", None),
-            "train_loss": results.get("loss", None),
-        }
-        with open(save_dir / "results.txt", "w") as f:
-            for key, value in final_results.items():
-                f.write(f"{key}: {value}\n")
-        logger.info(f"[{self.name}] Results saved to {save_dir / 'results.txt'}")
+        with open(save_dir / "results.json", "w") as f:
+            best_index = results.get("val_accuracy", []).index(
+                max(results.get("val_accuracy", [0]))
+            )
+            json.dump(
+                {
+                    "results": results,
+                    "best_epoch": best_index + 1,
+                    "best_val_accuracy": results.get("val_accuracy", [0])[best_index],
+                    "best_val_loss": results.get("val_loss", [0])[best_index],
+                },
+                f,
+                indent=4,
+            )
